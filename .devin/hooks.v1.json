@@ -1,86 +1,86 @@
 {
   "PermissionRequest": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "PostToolUse": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "PreToolUse": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "SessionEnd": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "SessionStart": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "Stop": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ],
   "UserPromptSubmit": [
     {
+      "matcher": "",
       "hooks": [
         {
-          "command": "python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"",
-          "timeout": 10,
-          "type": "command"
+          "type": "command",
+          "command": "sh -c 'set -a; [ -f \"$HOME/.tenetx/devin.env\" ] && . \"$HOME/.tenetx/devin.env\"; set +a; exec python3 \"${DEVIN_PROJECT_DIR:-.}/.devin/tenetx-hook.py\"'",
+          "timeout": 10
         }
-      ],
-      "matcher": ""
+      ]
     }
   ]
 }

@@ -1,0 +1,60 @@
+# TenetX — Devin blueprint backup (ambient TENETX_DEVIN_TOKEN for hooks)
+#
+# Why: Devin Settings → Secrets are bound only to Shell tools that need them.
+# Plugin / .devin hooks run in a separate process and often never see those vars.
+# This blueprint persists the secret into ~/.tenetx/devin.env on the snapshot so
+# every hook can source it (see .devin/hooks.v1.json in this repo).
+#
+# Paste into: Settings → Environment → Blueprints → (this repo or org) editor
+#
+# Blueprint Secrets tab — create ONE secret:
+#   Name:  TENETX_DEVIN_TOKEN
+#   Value: txdc1.<paste from TenetX Cloud tab → Devin Generate>
+#
+# Then rebuild the snapshot / start a NEW session that uses this blueprint.
+
+initialize: |
+  #!/bin/bash
+  set -euo pipefail
+  _ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+  log() { printf '%s [INFO] %s\n' "$(_ts)" "$*"; }
+  die() { printf '%s [ERROR] %s\n' "$(_ts)" "$*" >&2; exit 1; }
+
+  log "TenetX ambient Devin token setup starting."
+  [ -n "${TENETX_DEVIN_TOKEN:-}" ] \
+    || die "TENETX_DEVIN_TOKEN is not set — add it on this blueprint's Secrets tab"
+
+  case "$TENETX_DEVIN_TOKEN" in
+    txdc1.*) ;;
+    *) die "TENETX_DEVIN_TOKEN must start with txdc1. (mint from TenetX Cloud tab)" ;;
+  esac
+
+  mkdir -p "$HOME/.tenetx"
+  umask 077
+  # Quoted assignment so the value is safe even with special characters.
+  printf 'export TENETX_DEVIN_TOKEN=%q\n' "$TENETX_DEVIN_TOKEN" > "$HOME/.tenetx/devin.env"
+  chmod 600 "$HOME/.tenetx/devin.env"
+  log "Wrote $HOME/.tenetx/devin.env for hook processes."
+
+maintenance: |
+  #!/bin/bash
+  set -euo pipefail
+  _ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+  log() { printf '%s [INFO] %s\n' "$(_ts)" "$*"; }
+  die() { printf '%s [ERROR] %s\n' "$(_ts)" "$*" >&2; exit 1; }
+
+  log "TenetX ambient Devin token maintenance."
+  [ -n "${TENETX_DEVIN_TOKEN:-}" ] \
+    || die "TENETX_DEVIN_TOKEN is not set — add it on this blueprint's Secrets tab"
+
+  case "$TENETX_DEVIN_TOKEN" in
+    txdc1.*) ;;
+    *) die "TENETX_DEVIN_TOKEN must start with txdc1." ;;
+  esac
+
+  mkdir -p "$HOME/.tenetx"
+  umask 077
+  printf 'export TENETX_DEVIN_TOKEN=%q\n' "$TENETX_DEVIN_TOKEN" > "$HOME/.tenetx/devin.env"
+  chmod 600 "$HOME/.tenetx/devin.env"
+  [ -s "$HOME/.tenetx/devin.env" ] || die "devin.env missing after write"
+  log "TenetX ambient token ready."

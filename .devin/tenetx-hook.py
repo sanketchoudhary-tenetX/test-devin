@@ -6,7 +6,10 @@ to the repo as `.devin/tenetx-hook.py` (or pasted as a team hook command) and
 runs on the machine that actually executes tools. It downloads the Windsurf
 guard from the control plane, verifies it, then execs it with the same stdin.
 
-Required Devin secrets / environment:
+Required Devin secret:
+  TENETX_DEVIN_TOKEN  one value from the TenetX Cloud tab (origin, org, token)
+
+The three older names still work when TENETX_DEVIN_TOKEN is unset:
   TENETX_URL          control-plane origin (https://<org>.tenetx.ai)
   TENETX_ORG          org slug
   TENETX_VMCP_TOKEN   Windsurf VMCP token (same hook_type as Devin Local)
@@ -21,6 +24,7 @@ Keep byte-identical with cli-go/internal/hooks/devin_cloud_hook.py and
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -35,6 +39,13 @@ import urllib.request
 
 HOOK_TYPE = "windsurf"
 USER_AGENT = "TenetX-VMCP/1.0"
+# What capture labels this run as. The guard derives agent_id from the event and
+# falls back to "windsurf" when the event carries none, which files every Devin
+# Cloud session under Windsurf in Sessions (and lets the model fallback label the
+# agent "Claude Code"). Keep in step with the plugin bootstrap in
+# RajuFiyaaLifeStyle/tenetx-devin-plugins hooks/tenetx_devin_hook.py.
+DEFAULT_AGENT_ID = "devin"
+HOOK_SURFACE = "windsurf-devin-cloud"
 GUARD_TTL_SECONDS = 3600
 # The hooks.v1.json entry declares timeout=10, so the download and the guard
 # exec together must stay under it or Devin kills the hook mid-guard.
@@ -88,6 +99,37 @@ def _fail_open(reason: str, **fields: object) -> int:
     detail = fields.get("detail") or reason
     sys.stderr.write(f"[tenetx] Devin Cloud hook skipped: {detail}\n")
     return 0
+
+
+def _apply_bundled_secret() -> str | None:
+    """Expand TENETX_DEVIN_TOKEN into URL, org, and the VMCP bearer.
+
+    Returns an error reason when the secret is set but unusable, and None
+    when it is absent so the legacy three-variable path can run.
+    """
+    raw = _env("TENETX_DEVIN_TOKEN")
+    if not raw:
+        return None
+    prefix = "txdc1."
+    if not raw.startswith(prefix):
+        return "devin_token_invalid"
+    blob = raw[len(prefix):]
+    try:
+        padded = blob + ("=" * (-len(blob) % 4))
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return "devin_token_invalid"
+    if not isinstance(payload, dict):
+        return "devin_token_invalid"
+    url = str(payload.get("u") or "").strip().rstrip("/")
+    org = str(payload.get("o") or "").strip()
+    token = str(payload.get("t") or "").strip()
+    if not url or not org or not token:
+        return "devin_token_invalid"
+    os.environ["TENETX_URL"] = url
+    os.environ["TENETX_ORG"] = org
+    os.environ["TENETX_VMCP_TOKEN"] = token
+    return None
 
 
 def _token() -> str:
@@ -259,20 +301,57 @@ def _download_guard(url: str, org: str, token: str, dest: str) -> str | None:
             )
             return None
     else:
-        # The control plane should always advertise the digest; executing an
-        # unverified artifact is a downgrade worth seeing in `tenetx doctor`.
+        # The control plane always advertises the digest (get_vmcp_script sets
+        # X-TenetX-SHA256 on both the pinned and the unpinned branch), so a
+        # missing header means the bytes did not come from it. Fail closed:
+        # never exec an unverified artifact; the breadcrumb surfaces in
+        # `tenetx doctor`.
         _breadcrumb("guard_sha256_header_missing", endpoint=endpoint, version=version)
+        return None
     return _write_guard(body, dest)
 
 
+def _tag_payload(payload: bytes) -> bytes:
+    """Label the event as Devin before the guard reads it.
+
+    The whole event is forwarded verbatim as ``raw_event`` on the capture path,
+    so a key added here reaches the server unchanged. Unparseable input is
+    passed through untouched — mangling it would lose the event outright.
+    """
+    try:
+        event = json.loads(payload.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        _breadcrumb("event_not_json", bytes=len(payload))
+        return payload
+    if not isinstance(event, dict):
+        _breadcrumb("event_not_object", kind=type(event).__name__)
+        return payload
+    agent_id = _env("TENETX_DEVIN_AGENT_ID") or DEFAULT_AGENT_ID
+    tagged = dict(event)
+    for key, value in (("agent_id", agent_id), ("tenetx_hook_surface", HOOK_SURFACE)):
+        if not str(tagged.get(key) or "").strip():
+            tagged[key] = value
+    try:
+        return json.dumps(tagged).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        _breadcrumb("event_tag_failed", detail=exc)
+        return payload
+
+
 def main() -> int:
+    invalid = _apply_bundled_secret()
+    if invalid:
+        return _fail_open(
+            invalid,
+            detail="TENETX_DEVIN_TOKEN is not a valid Devin Cloud secret",
+        )
     url = _env("TENETX_URL")
     org = _env("TENETX_ORG")
     token = _token()
     if not url or not org or not token:
         return _fail_open(
             "missing_credentials",
-            detail="set TENETX_URL, TENETX_ORG, and TENETX_VMCP_TOKEN as Devin secrets",
+            detail="set TENETX_DEVIN_TOKEN, or TENETX_URL, TENETX_ORG, and TENETX_VMCP_TOKEN",
         )
     if _is_insecure_url(url):
         return _fail_open(
@@ -285,7 +364,7 @@ def main() -> int:
     os.environ["TENETX_VMCP_TOKEN"] = token
     os.environ.setdefault("TENETX_FAIL_MODE", "open")
     os.environ.setdefault("TENETX_INSTALL_MODE", "unmanaged")
-    payload = sys.stdin.buffer.read()
+    payload = _tag_payload(sys.stdin.buffer.read())
     guard = _guard_path()
     cached = _guard_trusted(guard)
     if not (cached and _guard_fresh(guard)):
@@ -294,7 +373,7 @@ def main() -> int:
                 return _fail_open(
                     "guard_unavailable",
                     path=guard,
-                    detail="could not download the Windsurf guard from the control plane",
+                    detail="could not download the Devin guard from the control plane",
                 )
             # A stale-but-trusted guard still enforces policy, so running it
             # beats failing open — but the staleness must not be silent.

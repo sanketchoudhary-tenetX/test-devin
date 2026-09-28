@@ -1,0 +1,55 @@
+# TenetX guard — Devin blueprint for "nova" (https://nova.tenetx.dev).
+# Paste into: Settings → Environment → Blueprints → Organization (or repo) blueprint
+#
+# Required secret: TENETX_SETUP_TOKEN
+#   Mint on your laptop: tenetx setup-token --org nova --api-base https://nova.tenetx.dev
+# Optional secret: TENETX_DEVIN_TOKEN (txdc1.… from TenetX Cloud tab)
+#   If set, also written to ~/.tenetx/devin.env for in-repo hooks.
+
+initialize: |
+  #!/bin/bash
+  set -euo pipefail
+  _ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+  log() { printf '%s [INFO] %s\n' "$(_ts)" "$*"; }
+  die() { printf '%s [ERROR] %s\n' "$(_ts)" "$*" >&2; exit 1; }
+  log "TenetX Devin guard setup on $(uname -s)/$(uname -m) user $(id -un)."
+
+  _i="$(mktemp)"
+  curl -fsSL "https://nova.tenetx.dev/install.sh" -o "$_i" || die "download failed"
+  head -n1 "$_i" | grep -q '^#!' || die "installer returned non-script (HTML/SPA?)"
+  sh "$_i" || die "installer failed"
+  rm -f "$_i"
+  export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"; hash -r
+  command -v tenetx >/dev/null || die "tenetx not on PATH after install"
+  log "tenetx installed: $(command -v tenetx)"
+
+maintenance: |
+  #!/bin/bash
+  set -euo pipefail
+  _ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+  log() { printf '%s [INFO] %s\n' "$(_ts)" "$*"; }
+  die() { printf '%s [ERROR] %s\n' "$(_ts)" "$*" >&2; exit 1; }
+  log "TenetX Devin guard maintenance on $(uname -s)/$(uname -m) user $(id -un)."
+
+  export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"; hash -r
+  command -v tenetx >/dev/null || die "tenetx not on PATH; initialize must run first"
+
+  GUARD="$HOME/.windsurf/hooks/tenetx-guard.sh"
+  if [ -x "$GUARD" ] && ls "$HOME"/.tenetx/vmcp_tokens/*windsurf* >/dev/null 2>&1; then
+    log "Devin guard already provisioned (cache hit)."
+  else
+    [ -n "${TENETX_SETUP_TOKEN:-}" ] || die "TENETX_SETUP_TOKEN is not set — add it under Secrets on this blueprint"
+    tenetx login --org "nova" --api-base "https://nova.tenetx.dev" --token "${TENETX_SETUP_TOKEN}" || die "tenetx login failed"
+    tenetx install devin --org "nova" --api-base "https://nova.tenetx.dev" --token "${TENETX_SETUP_TOKEN}" || die "tenetx install failed"
+    log "Devin guard provisioned at $GUARD."
+  fi
+
+  if [ -n "${TENETX_DEVIN_TOKEN:-}" ]; then
+    mkdir -p "$HOME/.tenetx"; umask 077
+    printf 'export TENETX_DEVIN_TOKEN=%q\n' "$TENETX_DEVIN_TOKEN" > "$HOME/.tenetx/devin.env"
+    chmod 600 "$HOME/.tenetx/devin.env"
+    log "Also wrote ambient TENETX_DEVIN_TOKEN for repo hooks."
+  fi
+
+  [ -x "$GUARD" ] || die "guard missing at $GUARD"
+  log "TenetX guard ready."
